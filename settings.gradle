@@ -1,0 +1,3 @@
+rootProject.name='Yoric'
+include ':app'
+include ':yoric'
