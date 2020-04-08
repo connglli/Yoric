@@ -6,14 +6,22 @@
 
 The workflow:
 ``` 
-1. Parse pacakge name of the app to get its UID, say UIDXXX (ActivityManagerService#forceStopPackage())
-2. Collect into procs (ArrayList<ProcessRecord>) all processes whose UID is UIDXXX via iterating the ProcessList maintained by ActivityManagerService (ProcessList#killPackageProcessesLocked())
+1. Parse pacakge name of the app to get its UID, say UIDXXX 
+   (ActivityManagerService#forceStopPackage())
+2. Collect into procs (ArrayList<ProcessRecord>) all processes whose UID is UIDXXX 
+   via iterating the ProcessList maintained by ActivityManagerService 
+   (ProcessList#killPackageProcessesLocked())
 3. For each process P in procs (ProcessList#killPackageProcessesLocked()): 
-  2.1 kill P using syscall kill(<pid_of_P>, SIGKILL) (ProcessRecord#kill() -> Process#killProcessQuiet())
-  2.2 kill the process members of the process cgroup P resides in (ProcessRecord#kill() -> ProcessList#killProcessGroup() -> Process#killProcessGroup() -> libprocessgroup: KillProcessGroup())
-    2.2.1 read /proc/<pid_of_p>/cgroup to know which process cgroup p belongs to, say C (libprocessgroup: KillProcessGroup())
+  2.1 kill P using syscall kill(<pid_of_P>, SIGKILL) (ProcessRecord#kill() 
+      -> Process#killProcessQuiet())
+  2.2 kill the process members of the process cgroup P resides in (ProcessRecord#kill() 
+      -> ProcessList#killProcessGroup() -> Process#killProcessGroup() 
+      -> libprocessgroup: KillProcessGroup())
+    2.2.1 read /proc/<pid_of_p>/cgroup to know which process cgroup p belongs to, 
+          say C (libprocessgroup: KillProcessGroup())
     2.2.2 for each process PP in the cgroup C (by reading /acct/uid_UIDXXX/pid_<pid_of_C>/cgroup.procs):
-      a. if PP is a leader of a process group (PID == PGID), kill its process group using syscall kill(-<pid_of_PP>, SIGKILL)
+      a. if PP is a leader of a process group (PID == PGID), kill its process group using 
+         syscall kill(-<pid_of_PP>, SIGKILL)
       b. otherwise, kill PP itself (libprocessgroup: DoKillProcessGroupOnce())
     2.2.3 repeat 2.2.2 40 times, and sleep 5ms each time each after
 4. clear other components still managered by other managers
@@ -46,10 +54,11 @@ From where, one can see that:
 
 Given that Yoric is a general and default-setting (empty activitiy/service implementations) 3rd-party demo app, one concludes that 
 ```
-in Android, all processes forked by zygote belongs to the process group led by zygote (unless the app itself sets the process group manually) 
+in Android, almoast all processes forked directly or indirectly by zygote belongs to 
+the process group led by zygote (unless the app itself sets the process group manually) 
 ```
 
-## Intuitively, What does force-stop do?
+## Intuitively, what does force-stop do?
 
 Given the abvoe conclusion, one knows in practice, when force-stopping a common 3rd-party app, the workflow `2.2.2-a` is usually *redandant*, and no process groups are actually killed (cause almost all processes are members of zygote group, not leaders), unless the app itself sets the process groups manually
 
@@ -69,17 +78,17 @@ In detail,
 + `remote` and `android-remote` watches each other
 + `remote-c` and `android-remote-c` watches each other
 
-## Yoric Workflow
+## What is the Yoric workflow?
 
 ```
-1. com.example.yoric (MainActivity) starts, and at the same time, starts com.example.yoric:remote (RemoteService)
-2. com.example.yoric:remote starts android.remote
+1. com.example.yoric (MainActivity) starts, and also starts com.example.yoric:remote (RemoteService)
+2. com.example.yoric:remote starts android.remote (AndroidRemostService)
 3. com.example.yoric:remote forks twice to com.example.yoric:remote-c
 4. android.remote forks twice to android.remote-c
-5. each process creates and locks self's file
-6. aftewards creates a flag file to tell its watcher that it is ready
-7. aftewards waits until it watchee ready
-8. aftewards watch its watchee 
+5. each watcher creates and locks self's file
+6. aftewards, creates a flag file to tell its watcher that it is ready
+7. aftewards, waits until it watchee ready
+8. aftewards, watches its watchee 
 9. when one process is watched dead, the watcher starts it, and kill self
 ```
 
